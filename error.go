@@ -1,6 +1,7 @@
 package errorx
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -270,4 +271,28 @@ func joinStringsIfNonEmpty(delimiter string, parts ...string) string {
 
 		return strings.Join(filteredParts, delimiter)
 	}
+}
+
+func (e *Error) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Message    string                 `json:"message"`
+		Properties map[string]interface{} `json:"properties,omitempty"`
+	}{
+		Message:    e.message,
+		Properties: e.mapFromPrintableProperties(),
+	})
+}
+
+func (e *Error) mapFromPrintableProperties() map[string]interface{} {
+	uniq := make(map[string]interface{}, e.printablePropertyCount)
+	for m := e.properties; m != nil; m = m.next {
+		if !m.p.printable {
+			continue
+		}
+		if _, ok := uniq[m.p.label]; ok {
+			continue
+		}
+		uniq[m.p.label] = m.value
+	}
+	return uniq
 }

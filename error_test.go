@@ -1,10 +1,12 @@
 package errorx
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -157,4 +159,72 @@ func createWrappedErrorFuncInnerInStackTrace(et *Type) *Error {
 
 func createErrorInAnotherGoroutine(et *Type, channel chan *Error) {
 	channel <- et.NewWithNoMessage()
+}
+
+func TestMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		prop  Property
+		value interface{}
+		want  string
+	}{
+		{
+			"withNonPrintableProperty",
+			RegisterProperty("test"),
+			"",
+			`{"message":"ouch"}`,
+		},
+		{
+			"withPrintableProperty_string",
+			RegisterPrintableProperty("test"),
+			"data",
+			`{"message":"ouch","properties":{"test":"data"}}`,
+		},
+		{
+			"withPrintableProperty_int",
+			RegisterPrintableProperty("test"),
+			123456789,
+			`{"message":"ouch","properties":{"test":123456789}}`,
+		},
+		{
+			"withPrintableProperty_float",
+			RegisterPrintableProperty("test"),
+			123.456,
+			`{"message":"ouch","properties":{"test":123.456}}`,
+		},
+		{
+			"withPrintableProperty_bool",
+			RegisterPrintableProperty("test"),
+			true,
+			`{"message":"ouch","properties":{"test":true}}`,
+		},
+		{
+			"withPrintableProperty_slice_string",
+			RegisterPrintableProperty("test"),
+			[3]string{"a", "b", "c"},
+			`{"message":"ouch","properties":{"test":["a","b","c"]}}`,
+		},
+		{
+			"withPrintableProperty_slice_int",
+			RegisterPrintableProperty("test"),
+			[3]int{1, 2, 3},
+			`{"message":"ouch","properties":{"test":[1,2,3]}}`,
+		},
+		{
+			"withPrintableProperty_map",
+			RegisterPrintableProperty("test"),
+			map[string]interface{}{"key1": "a", "key2": 1, "key3": true},
+			`{"message":"ouch","properties":{"test":{"key1":"a","key2":1,"key3":true}}}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errData := Decorate(testType.New(tt.name), "ouch").WithProperty(tt.prop, tt.value)
+			data, err := json.Marshal(&errData)
+			if err != nil {
+				panic(err)
+			}
+			assert.Equal(t, tt.want, string(data))
+		})
+	}
 }
